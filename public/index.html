@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8">
+		<title>Web Chat</title>
+		<link rel="stylesheet" href="./style.css" />
+	</head>
+	<body>
+		<div class="sidebar">
+			<h1><a href="#" id="titlelink"><span id="hovertitle">Web Chat</span></a></h1>
+			<input type="text" name="serverUrl" id="serverUrl" placeholder="Enter server url..." />
+			<input type="text" name="username" id="username" placeholder="Enter username..." class="nomargin" />
+			<p>Status: <span id="status">not connected</span></p>
+			<button onclick="connect()">Connect</button>
+			<button onclick="disconnect()" class="nomargin">Disconnect</button>
+			<p><a id="wc_img_link" href="#" target="_blank">Help me paste images into the chat</a></p>
+			<script>
+				document.querySelector("#wc_img_link").href = `http://${window.location.hostname}/wiki/articles/webchat_img.html`
+			</script>
+		</div>
+		<div class="main">
+			<div class="screen" id="screen">
+				<ul id="msgList">
+				</ul>
+			</div>
+			<div class="messageBox">
+				<input type="text" name="message" id="msgbox" title="Message Box">
+				<button type="submit" onclick="sendMessage()" id="sendMessageButton">Send</button>
+			</div>
+		</div>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js" integrity="sha512-q/dWJ3kcmjBLU4Qc47E4A9kTB4m3wuTY7vkFJDTZKjTs8jhyGQnaUrxa0Ytd0ssMZhbNua9hE+E7Qv1j+DyZwA==" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/jsencrypt/3.3.2/jsencrypt.min.js" integrity="sha512-94ncgEEqkuZ4yNTFmu2dSn1TJ6Ij+ANQqpR7eLVU99kzvYzu6UjBxuVoNHtnd29R+T6nvK+ugCVI698pbyEkvQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+		<script src="./index.js"></script>
+	</body>
+</html>

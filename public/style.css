@@ -1,0 +1,110 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&display=swap');
+
+* {
+	margin: 0;
+	padding: 0;
+	font-family: "IBM Plex Mono", monospace;
+}
+
+body {
+	background-color: white;
+	display: flex;
+	overflow: hidden;
+}
+
+.sidebar {
+	width: 20vw;
+	background-color: black;
+	height: 100vh;
+	display: flex;
+	justify-content: flex-start;
+	flex-direction: column;
+}
+
+.sidebar * {
+	color: white;
+	margin-top: 6.5%;
+	font-family: "IBM Plex Mono";
+	text-align: center;
+	font-weight: 500;
+}
+.sidebar button {
+	padding: 0;
+	color: black;
+}
+
+.sidebar h1 {
+	flex: 0.4;
+}
+
+.main {
+	width: 80vw;
+	height: 100vh
+}
+
+.screen {
+	height: 95vh;
+	overflow: auto;
+}
+
+.screen span {
+	padding-right: 0;
+}
+
+.screen ul {
+	list-style: none;
+}
+
+.screen * {
+	padding: 24px 24px 0;
+}
+
+.messageBox {
+	height: 5vh;
+	display: flex;
+}
+
+.messageBox input {
+	flex: 1;
+}
+
+.messageBox button {
+	flex: 0.2;
+}
+
+.messageBox * {
+	height: 100%;
+}
+
+.bold {
+	font-weight: bold;
+}
+
+.nomargin {
+	margin: 0;
+}
+
+.username {
+	padding-left: 0;
+}
+
+.messagecontent {
+	padding-top: 0
+}
+  
+#titlelink:hover span {
+	display: none
+}
+
+#titlelink:hover:before {
+	content: "Drag to your bookmarks"
+}
+
+.sidebar input {
+	color: black;
+	text-align: center;
+}
+
+.nopadding {
+	padding: 0
+}
