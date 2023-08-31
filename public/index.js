@@ -7,16 +7,10 @@ const serverUrlElement = document.querySelector("#serverUrl")
 const usernameBox = document.querySelector("#username")
 const msgBox = document.querySelector("#msgbox");
 
-/*
-	what do we even need to do
-	- connection system (connect to server)
-	- channel system (handle channels)
-
-*/
-
 const allowedElements = ["B", "I", "U", "IMG", "STRONG", "EM", "P", "A", "VIDEO", "AUDIO", "SOURCE", "BR"]
 
-serverUrlElement.value = `${window.location.protocol.startsWith("https") ? "wss" : "ws"}://${window.location.host}`
+//TODO, no ws
+//serverUrlElement.value = `${window.location.protocol.startsWith("https") ? "wss" : "ws"}://${window.location.host}`
 
 const statusspan = document.getElementById("status")
 function setStatus(status){
@@ -66,7 +60,19 @@ function sendSystemMessage(message){
 	addMsgElement("System", message, Date.now())
 }
 
-function connect(){
+//AES-256
+const keySize = 256
+function generateAESKey(){
+	const key = CryptoJS.lib.WordArray.random(keySize / 8)
+	const keyHex = key.toString(CryptoJS.enc.Hex)
+	return keyHex
+}
+
+function encrypt(text, key){
+	return CryptoJS.AES.encrypt(text, key).toString()	
+}
+
+async function connect(){
 	if(connected){
 		sendSystemMessage("Failed to connect: Already connected")
 		return
@@ -78,10 +84,101 @@ function connect(){
 		sendSystemMessage("Failed to connect: Blank username")
 		return
 	}
+
 	connecting = true
+
+	function close(){
+		if(socket) socket.close("connection terminated")
+		connecting = false
+	}
+
 	let serverUrl = serverUrlElement.value
 	sendSystemMessage(`Opening connection to ${serverUrl}...`)
-	setStatus("connecting...")
+	
+	let AESKey = generateAESKey()
+	//get pubkey and sum
+
+	sendSystemMessage("Initiating secure handshake.")
+
+	let serverPublicKey
+
+	try {
+		let url = `http://${serverUrl}/publickey`
+		console.log(url)
+		let resp = await fetch(url)
+		if(resp.ok){
+			let body = await resp.text()
+			//body is public key
+			serverPublicKey = body
+		} else {
+			console.error("resp not ok")
+			sendSystemMessage("ERROR: Couldn't get server public key. Terminating connection...")
+			close()
+			return
+		}
+	} catch (err) {
+		console.error(err)
+		sendSystemMessage("ERROR: Couldn't get server public key. Terminating connection...")
+		close()
+		return
+	}
+
+	sendSystemMessage("Successfully got server public key.")
+
+	let serverPublicKeyChecksum
+
+	try {
+		let url = `http://${serverUrl}/publickeychecksum`
+		console.log(url)
+		let resp = await fetch(url)
+		if(resp.ok){
+			let body = await resp.text()
+			//body is public key checksum
+			serverPublicKeyChecksum = body
+		} else {
+			console.error("resp not ok")
+			sendSystemMessage("ERROR: Couldn't get server public key checksum. Terminating connection...")
+			close()
+			return
+		}
+	} catch (err) {
+		console.error(err)
+		sendSystemMessage("ERROR: Couldn't get server public key checksum. Terminating connection...")
+		close()
+		return
+	}
+
+	sendSystemMessage(`Public key checksum is ${serverPublicKeyChecksum}`)
+	//calculate checksum ourselves
+	let calculatedChecksum = CryptoJS.SHA256(serverPublicKey).toString(CryptoJS.enc.Hex)
+	if(calculatedChecksum !== serverPublicKeyChecksum){
+		sendSystemMessage("WARNING: THERE IS A STRONG CHANCE SOMEONE HAS INTERCEPTED THE CONNECTION")
+		sendSystemMessage("WARNING: Server and local checksum do not match.")
+		console.error("server public key checksum", serverPublicKeyChecksum)
+		console.error("local public key checksum", calculatedChecksum)
+		console.error("public key from server:")
+		console.error(serverPublicKey)
+		sendSystemMessage("Terminating connection...")
+		close()
+		return
+	} else {
+		sendSystemMessage("Checksums are ok.")
+	}
+
+	//encrypt our AES key with the servers public key
+	let encryptor = new JSEncrypt()
+	encryptor.setPublicKey(serverPublicKey)
+
+	let encryptedAESKey = encryptor.encrypt(AESKey)
+	
+	//how does the server securely send data to client? client dont have public key, only AES key
+	//encrypt with aes key, TODO, find out security complications with this
+	
+	//fetch(`${serverUrl}/connect`, {method: "POST", body: AESKey})
+
+	//console.log(CryptoJS.AES.decrypt(encrypted, AESKey).toString(CryptoJS.enc.Utf8))
+
+	//setStatus("connecting...")
 	socket = io(serverUrl, {
 		reconnection: false
 	})
@@ -94,14 +191,18 @@ function connect(){
 		connecting = false
 	}, 5000);
 
-	socket.on('connect', function() {
+	socket.on('connect', () => {
 		// socket connected successfully, clear the timer
 		clearTimeout(socket._connectTimer);
 		connected = true
 		sendSystemMessage("Connected")
 		setStatus("connected")
 		connecting = false
-		socket.emit("assignUsername", usernameBox.value)
+		//TODO
+		console.log(AESKey)
+		socket.emit("encryptedKey", encryptedAESKey) 
+		let x = encrypt(usernameBox.value, AESKey)
+		socket.emit("assignUsername", x)
 	});
 
 	socket.on("disconnect", reason => {
@@ -263,3 +364,4 @@ msgBox.addEventListener("keypress", (event) => {
 		document.getElementById("sendMessageButton").click();
 	}
 })
+
