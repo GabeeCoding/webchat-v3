@@ -9,10 +9,9 @@ const msgBox = document.querySelector("#msgbox");
 
 const allowedElements = ["B", "I", "U", "IMG", "STRONG", "EM", "P", "A", "VIDEO", "AUDIO", "SOURCE", "BR"]
 
-//TODO, no ws
-//serverUrlElement.value = `${window.location.protocol.startsWith("https") ? "wss" : "ws"}://${window.location.host}`
+serverUrlElement.value = `${window.location.host}`
 
-const statusspan = document.getElementById("status")
+const statusspan = document.querySelector("#status")
 function setStatus(status){
 	statusspan.innerHTML = status
 }
@@ -68,10 +67,6 @@ function generateAESKey(){
 	return keyHex
 }
 
-function encrypt(text, key){
-	return CryptoJS.AES.encrypt(text, key).toString()	
-}
-
 async function connect(){
 	if(connected){
 		sendSystemMessage("Failed to connect: Already connected")
@@ -88,18 +83,30 @@ async function connect(){
 	connecting = true
 
 	function close(){
-		if(socket) socket.close("connection terminated")
+		if(socket) socket.close()
 		connecting = false
+		setStatus("connection terminated")
 	}
 
 	let serverUrl = serverUrlElement.value
 	sendSystemMessage(`Opening connection to ${serverUrl}...`)
-	
+
+
 	let AESKey = generateAESKey()
-	//get pubkey and sum
+
+	const decrypt = encrypted => {
+		return CryptoJS.AES.decrypt(encrypted, AESKey).toString(CryptoJS.enc.Utf8)
+	}
+
+	sendSystemMessage("Generated AES key.")
+	const encrypt = text => {
+		return CryptoJS.AES.encrypt(text, AESKey).toString()	
+	}
+	window.encrypt = encrypt
 
 	sendSystemMessage("Initiating secure handshake.")
 
+	//get pubkey and sum
 	let serverPublicKey
 
 	try {
@@ -158,7 +165,7 @@ async function connect(){
 		console.error("local public key checksum", calculatedChecksum)
 		console.error("public key from server:")
 		console.error(serverPublicKey)
-		sendSystemMessage("Terminating connection...")
+		sendSystemMessage("Will not continue. Terminating connection...")
 		close()
 		return
 	} else {
@@ -179,6 +186,7 @@ async function connect(){
 	//console.log(CryptoJS.AES.decrypt(encrypted, AESKey).toString(CryptoJS.enc.Utf8))
 
 	//setStatus("connecting...")
+	sendSystemMessage("Connecting to socket server...")
 	socket = io(serverUrl, {
 		reconnection: false
 	})
@@ -190,19 +198,27 @@ async function connect(){
 		setStatus("failed to connect")
 		connecting = false
 	}, 5000);
+	
+	socket.on("decryptKeyFailed", () => {
+		sendSystemMessage("ERROR: The server failed to decrypt the AES key. Terminating connection...")
+		close()
+	})
+
+	socket.on("keyDecrypted", () => {
+		sendSystemMessage("Server successfully decrypted AES key.")
+		//assign username
+		socket.emit("assignUsername", encrypt(usernameBox.value))
+	})
 
 	socket.on('connect', () => {
 		// socket connected successfully, clear the timer
 		clearTimeout(socket._connectTimer);
 		connected = true
-		sendSystemMessage("Connected")
+		sendSystemMessage("Connected to socket server.")
 		setStatus("connected")
 		connecting = false
-		//TODO
-		console.log(AESKey)
+		sendSystemMessage("Sending encrypted AES key to server...")
 		socket.emit("encryptedKey", encryptedAESKey) 
-		let x = encrypt(usernameBox.value, AESKey)
-		socket.emit("assignUsername", x)
 	});
 
 	socket.on("disconnect", reason => {
@@ -220,12 +236,17 @@ async function connect(){
 		connected = false
 	})
 
-	socket.on("msg", (data) => {
+	socket.on("msg", encrypted => {
+		console.log(`encrypted msg ${encrypted}`)
+		let data = JSON.parse(decrypt(encrypted))
+		console.log(`decrypted message ${data}`)
+		//TODO change favicon
 		addMsgElement(data.username, data.content, new Date())
 	})
 
-	socket.on("systemMessage", (message) => {
-		sendSystemMessage(`SERVER: ${message}`)
+	socket.on("systemMessage", message => {
+		let data = decrypt(message)
+		sendSystemMessage(`SERVER: ${data}`)
 	})
 }
 
@@ -257,7 +278,7 @@ const commands = [
 				return
 			}
 			sendSystemMessage(`Setting channel to ${channel}...`)
-			socket.emit("switchChannel", channel)
+			socket.emit("switchChannel", encrypt(channel))
 		}
 	},
 	{
@@ -338,7 +359,7 @@ function sendMessage(){
 		*/
 		//send
 		msgBox.value = ""
-		socket.emit("sendMessage", content)
+		socket.emit("sendMessage", encrypt(content))
 	}
 }
 
@@ -361,7 +382,7 @@ function disconnect(){
 msgBox.addEventListener("keypress", (event) => {
 	if (event.key === "Enter") {
 		event.preventDefault();
-		document.getElementById("sendMessageButton").click();
+		document.querySelector("#sendMessageButton").click();
 	}
 })
 

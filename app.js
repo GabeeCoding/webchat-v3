@@ -31,6 +31,27 @@ console.log(publicKey)
 
 let usernames = {}
 
+function encryptWithKey(text, key){
+	return CryptoJS.AES.encrypt(text, key).toString()
+}
+
+function sendToChannel(channel, content, isSystemMessage, userData){
+	for (const [sid, user] of Object.entries(usernames)) {
+		if(user["channel"] !== undefined && user["channel"] === channel){
+			let key = user["aesKey"]
+			if(key === undefined){
+				console.error(`no AES key for sid ${sid} username ${user["username"]}`)
+				return
+			}
+			if(isSystemMessage){
+				io.to(sid).emit("systemMessage", encryptWithKey(content, key))
+			} else {
+				io.to(sid).emit("msg", encryptWithKey(JSON.stringify({"username": userData["username"], "content": content}), key))
+			}
+		}
+	}
+}
+
 app.use((req, resp, next) => {
 	resp.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
 	if (req.method === 'OPTIONS') {
@@ -73,12 +94,16 @@ io.on("connection", socket => {
 
 	const encrypt = data => {
 		//encrypt AES
-		return CryptoJS.AES.encrypt(text, usernames[sid]["aesKey"]).toString()
+		return CryptoJS.AES.encrypt(data, usernames[sid]["aesKey"]).toString()
+	}
+
+	const sendSystemMessage = message => {
+		io.to(sid).emit("systemMessage", encrypt(message))
 	}
 
 	const disconnect = () => {
 		socket.disconnect()
-		usernames[sid] = undefined
+		delete usernames[sid]
 	}
 
 	socket.on("encryptedKey", encrypted => {
@@ -89,60 +114,135 @@ io.on("connection", socket => {
 		} catch (err){
 			console.error("handled exception: error decrypting aes key")
 			console.error(err)
-			//TODO for client
 			socket.emit("decryptKeyFailed")
 			disconnect()
 			return
 		}
 		console.log("done")
 		console.log(decrypted)
+		//TODO: verify that key works, send message to client, expect specific response. If no correct response, disconnect client
 		if(usernames[sid]["aesKey"] !== undefined){
 			console.error("aes key already exists")
 			return
 		}
 		usernames[sid]["aesKey"] = decrypted
+		socket.emit("keyDecrypted")
 	})
 
 	const decryptData = encrypted => {
 		if(!encrypted || usernames[sid]["aesKey"] === undefined){
 			disconnect()
-			return
+			return { ok: false }
 		}
-		return CryptoJS.AES.decrypt(encrypted, usernames[sid]["aesKey"]).toString(CryptoJS.enc.Utf8)
+		return { ok: true, data: CryptoJS.AES.decrypt(encrypted, usernames[sid]["aesKey"]).toString(CryptoJS.enc.Utf8)}
 	}
 
+	socket.on("getChannels", () => {
+		listOfChannels = []
+		for (user of Object.values(usernames)){
+			if("channel" in user && !listOfChannels.find(cname => user["channel"] === cname)){
+				listOfChannels.push(user["channel"])
+			}
+		}
+		console.log("channel list", listOfChannels)
+		channelsWithMembers = [] 
+		listOfChannels.forEach(channel => {
+			inChannel = []
+			for (user of Object.values(usernames)){
+				if("channel" in user && "username" in user && user["channel"] === channel){
+					inChannel.push(user["username"])
+				}
+			}
+			channelsWithMembers.push(`${channel} (${inChannel.join(", ")})`)
+		})
+		console.log("channels with members", channelsWithMembers)
+		sendSystemMessage(channelsWithMembers.join(", "))
+	})
+
+	socket.on("usersInChannel", () => {
+		let userData = usernames[sid]
+		if(!("channel" in userData)){
+			sendSystemMessage("Failed to get users in channel: Not in channel")
+			return
+		}
+		let channel = userData["channel"]
+		let usersInChannel = []
+		for(user of Object.values(usernames)){
+			if("channel" in user && user["channel"] === channel){
+				usersInChannel.push(user["username"])
+			}
+		}
+		sendSystemMessage(`${usersInChannel.length} in channel: ${usersInChannel.join(", ")}`)
+	})
+
 	socket.on("assignUsername", encrypted => {
-		let data = decryptData(encrypted)
+		let { ok, data }  = decryptData(encrypted)
+		if(!ok) return
+		if(data.toLowerCase() === "system"){
+			sendSystemMessage(`Failed to assign username: ${data} is a reserved username`)
+			disconnect()
+			return
+		}
+
+		if(data.length > 30){
+			sendSystemMessage("Failed to assign username: Username too long (30 character limit)")
+			disconnect()
+			return
+		} 
 		//TODO check for username length and attempts to switch twice
 		const duplicate_recursive = username => {
-			for (const v of Object.values(usernames)) {
+			for (let v of Object.values(usernames)) {
+				console.log("whatttt", v)
 				if(v["username"] !== undefined && v["username"] === username){
-					return duplicate_recursive(username + " (duplicate")
+					return duplicate_recursive(username + " (duplicate)")
 				}
 			}
 			return username
-		})
+		}
 		let username = duplicate_recursive(data)
 		usernames[sid]["username"] = username
-		io.to(sid).emit("systemMessage", encrypt("Username set to " + username))
+		sendSystemMessage(`Username set to ${username}`)
 		console.log(usernames)
 	})
-	
-	socket.on("switchChannel", encrypted => {
-		let data = decryptData(encrypted)
-		if(data === ""){
-			
-		}
 
+	socket.on("sendMessage", encrypted => {
+		let { ok, data } = decryptData(encrypted)
+		if(!ok) return
+		let channel = usernames[sid]["channel"]
+		if(channel === undefined){
+			sendSystemMessage("You need to switch to a channel first. Type /channel channelName to switch.")
+			return
+		}
+		sendToChannel(channel, data, false, usernames[sid])
+	})
+
+	socket.on("switchChannel", encrypted => {
+		let { ok, data } = decryptData(encrypted)
+		if(!ok) return
+		if(data === ""){
+			sendSystemMessage("Channel is blank")
+			return
+		}
+		if(usernames[sid]["channel"] !== undefined){
+			if(data === usernames[sid]["channel"]){
+				sendSystemMessage("Error: Can't switch to same channel")
+				return
+			}
+			sendToChannel(usernames[sid]["channel"], `${usernames[sid]["channel"]} switched to another channel`, true)
+		}
+		usernames[sid]["channel"] = data
+		sendSystemMessage("Successfully switched channel")
+		sendToChannel(data, `${usernames[sid]["username"]} joined the channel`, true)
 	})
 
 	socket.on("disconnect", () => {
 		console.log(`${sid} disconnected`)
 		if(usernames[sid] !== undefined){
-			//TODO, send message to channel
+			if(usernames[sid]["channel"] !== undefined){
+				sendToChannel(usernames[sid]["channel"], `${usernames[sid]["username"]} disconnected`, true)
+			}
 		}
-		usernames[sid] = undefined
-
+		delete usernames[sid]
 	})
 })
 
