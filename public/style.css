@@ -47,16 +47,8 @@ body {
 	overflow: auto;
 }
 
-.screen span {
-	padding-right: 0;
-}
-
 .screen ul {
 	list-style: none;
-}
-
-.screen * {
-	padding: 24px 24px 0;
 }
 
 .messageBox {
@@ -84,14 +76,14 @@ body {
 	margin: 0;
 }
 
-.username {
-	padding-left: 0;
+.nopadding {
+	padding: 0
 }
 
-.messagecontent {
-	padding-top: 0
+.username {
+	padding-right: 10px
 }
-  
+
 #titlelink:hover span {
 	display: none
 }
@@ -105,6 +97,18 @@ body {
 	text-align: center;
 }
 
-.nopadding {
+#msgList {
+	padding: 24px 60px 0
+}
+
+#msgList > li {
+	margin-bottom: 22px;
+}
+
+.messagecontent {
 	padding: 0
+}
+
+.msgDate {
+	padding: 10px;
 }

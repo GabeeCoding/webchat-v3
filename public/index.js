@@ -22,6 +22,7 @@ function addMsgElement(name, content, timestamp){
 		let nameSpan = document.createElement("span")
 			nameSpan.className = "bold username"
 		let dateSpan = document.createElement("span")
+			dateSpan.className = "msgDate"
 		infoP.appendChild(nameSpan)
 		infoP.appendChild(dateSpan)
 	let messageP = document.createElement("p")
@@ -93,7 +94,6 @@ async function connect(){
 
 
 	let AESKey = generateAESKey()
-
 	const decrypt = encrypted => {
 		return CryptoJS.AES.decrypt(encrypted, AESKey).toString(CryptoJS.enc.Utf8)
 	}
@@ -125,7 +125,7 @@ async function connect(){
 		}
 	} catch (err) {
 		console.error(err)
-		sendSystemMessage("ERROR: Couldn't get server public key. Terminating connection...")
+		sendSystemMessage(`ERROR: Couldn't get server public key. Terminating connection... <br><br>Debug log:<br>${err.stack.replace("\n", "<br>")}`)
 		close()
 		return
 	}
@@ -150,7 +150,7 @@ async function connect(){
 		}
 	} catch (err) {
 		console.error(err)
-		sendSystemMessage("ERROR: Couldn't get server public key checksum. Terminating connection...")
+		sendSystemMessage(`ERROR: Couldn't get server public key checksum. Terminating connection... <br><br>Debug log:<br>${err.stack.replace("\n", "<br>")}`)
 		close()
 		return
 	}
@@ -237,9 +237,7 @@ async function connect(){
 	})
 
 	socket.on("msg", encrypted => {
-		console.log(`encrypted msg ${encrypted}`)
 		let data = JSON.parse(decrypt(encrypted))
-		console.log(`decrypted message ${data}`)
 		//TODO change favicon
 		addMsgElement(data.username, data.content, new Date())
 	})
