@@ -85,7 +85,7 @@ app.get("/publickey", (req, resp) => {
 })
 
 app.get("/usercount", (req, resp) => {
-	resp.send(usernames.length.toString())
+	resp.send(Object.keys(usernames).length.toString())
 })
 
 io.on("connection", socket => {
