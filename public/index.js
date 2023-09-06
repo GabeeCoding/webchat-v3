@@ -2,6 +2,8 @@ let socket
 let connected = false
 let connecting = false
 
+let inputResolve = null
+
 const ScreenElement = document.querySelector("#screen")
 const serverUrlElement = document.querySelector("#serverUrl")
 const usernameBox = document.querySelector("#username")
@@ -92,6 +94,7 @@ async function connect(){
 	let serverUrl = serverUrlElement.value
 	sendSystemMessage(`Opening connection to ${serverUrl}...`)
 
+	setStatus("connecting...")
 
 	let AESKey = generateAESKey()
 	const decrypt = encrypted => {
@@ -117,9 +120,10 @@ async function connect(){
 			let body = await resp.text()
 			//body is public key
 			serverPublicKey = body
+			window.serverPublicKey = body
 		} else {
 			console.error("resp not ok")
-			sendSystemMessage("ERROR: Couldn't get server public key. Terminating connection...")
+			sendSystemMessage(`ERROR: Couldn't get server public key (HTTP ${resp.status}). Terminating connection...`)
 			close()
 			return
 		}
@@ -132,44 +136,67 @@ async function connect(){
 
 	sendSystemMessage("Successfully got server public key.")
 
-	let serverPublicKeyChecksum
+	//calculate checksum ourselves
+	let calculatedChecksum = CryptoJS.SHA256(serverPublicKey).toString(CryptoJS.enc.Hex)
 
-	try {
-		let url = `http://${serverUrl}/publickeychecksum`
-		console.log(url)
-		let resp = await fetch(url)
-		if(resp.ok){
-			let body = await resp.text()
-			//body is public key checksum
-			serverPublicKeyChecksum = body
-		} else {
-			console.error("resp not ok")
-			sendSystemMessage("ERROR: Couldn't get server public key checksum. Terminating connection...")
+	sendSystemMessage(`Public key checksum is ${calculatedChecksum}`)
+
+	//got checksum, check local db for known hosts
+	//serverUrl, calculatedChecksum
+	let knownHosts = JSON.parse(localStorage.getItem("knownHosts")) || []
+
+	let match = knownHosts.find(host => host.serverUrl === serverUrl)
+
+	if(match){
+		//found it
+		//check if checksum the same
+		if(match.checksum !== calculatedChecksum){
+			//NOT THE SAME
+			//thats an oopsie
+			sendSystemMessage("WARNING: IT IS POSSIBLE SOMEONE HAS INTERCEPTED THE CONNECTION")
+			sendSystemMessage("WARNING: Checksum from known hosts does not match.")
+			sendSystemMessage(`WARNING: Known hosts checksum: ${match.checksum}`)
+			sendSystemMessage(`WARNING: Generated checksum: ${calculatedChecksum}`)
+			sendSystemMessage("It may also be possible that the host key has changed. If you think that is the case, you can reset the known hosts by typing /clearknownhosts")
+			sendSystemMessage("Will not connect. Terminating connection...")
 			close()
 			return
 		}
-	} catch (err) {
-		console.error(err)
-		sendSystemMessage(`ERROR: Couldn't get server public key checksum. Terminating connection... <br><br>Debug log:<br>${err.stack.replace("\n", "<br>")}`)
-		close()
-		return
-	}
-
-	sendSystemMessage(`Public key checksum is ${serverPublicKeyChecksum}`)
-	//calculate checksum ourselves
-	let calculatedChecksum = CryptoJS.SHA256(serverPublicKey).toString(CryptoJS.enc.Hex)
-	if(calculatedChecksum !== serverPublicKeyChecksum){
-		sendSystemMessage("WARNING: THERE IS A STRONG CHANCE SOMEONE HAS INTERCEPTED THE CONNECTION")
-		sendSystemMessage("WARNING: Server and local checksum do not match.")
-		console.error("server public key checksum", serverPublicKeyChecksum)
-		console.error("local public key checksum", calculatedChecksum)
-		console.error("public key from server:")
-		console.error(serverPublicKey)
-		sendSystemMessage("Will not continue. Terminating connection...")
-		close()
-		return
 	} else {
-		sendSystemMessage("Checksums are ok.")
+		//no match
+		//ask if still want to connect
+		sendSystemMessage("INFO: new host")
+		sendSystemMessage(`Host checksum is ${calculatedChecksum}`)
+		//ask for input
+		//
+		function ask(message){
+			return new Promise((resolve, reject) => {
+				sendSystemMessage(message)
+				inputResolve = resolve
+			})
+		}
+		let message = "<b>Do you want to continue connecting? (y,n,pubkey)</b>"
+		let shouldStillConnect = false
+		while(true){
+			let input = await ask(message)
+			if(input === "y"){
+				shouldStillConnect = true
+				break
+			} else if(input === "n") {
+				break
+			} else if(input === "pubkey"){
+				sendSystemMessage(serverPublicKey.replaceAll("\n", "<br>"))
+			}
+		}
+		if(shouldStillConnect){
+			//add to known hosts
+			knownHosts.push({serverUrl: serverUrl, checksum: calculatedChecksum})
+			localStorage.setItem("knownHosts", JSON.stringify(knownHosts))
+		} else {
+			sendSystemMessage("Terminating connection...")
+			close()
+			return
+		}
 	}
 
 	//encrypt our AES key with the servers public key
@@ -181,11 +208,7 @@ async function connect(){
 	//how does the server securely send data to client? client dont have public key, only AES key
 	//encrypt with aes key, TODO, find out security complications with this
 	
-	//fetch(`${serverUrl}/connect`, {method: "POST", body: AESKey})
 
-	//console.log(CryptoJS.AES.decrypt(encrypted, AESKey).toString(CryptoJS.enc.Utf8))
-
-	//setStatus("connecting...")
 	sendSystemMessage("Connecting to socket server...")
 	socket = io(serverUrl, {
 		reconnection: false
@@ -314,6 +337,53 @@ const commands = [
 			socket.emit("usersInChannel")
 		}
 	},
+	{
+		name: "/publickey",
+		aliases: ["pubkey"],
+		description: "Get the public key of the currently connected server",
+		run: () => {
+			if(!connected){
+				sendSystemMessage("Failed to output public key: Not connected")
+				return
+			}
+			sendSystemMessage(window.serverPublicKey.replaceAll("\n", "<br>"))
+		}
+	},
+	{
+		name: "/clear",
+		aliases: [],
+		description: "Clears the chat.",
+		run: () => {
+			document.querySelector("#msgList").innerHTML = ""
+		}
+	},
+	{
+		name: "/clearknownhosts",
+		aliases: [],
+		description: "Clear the known hosts database.",
+		run: () => {
+			localStorage.setItem("knownHosts", "[]")
+			sendSystemMessage("Cleared known hosts")
+		}
+	},
+	{
+		name: "/knownhosts",
+		aliases: [],
+		description: "List known hosts",
+		run: () => {
+			let knownHosts = JSON.parse(localStorage.getItem("knownHosts")) || []
+			if(knownHosts.length === 0){
+				sendSystemMessage("No known hosts")
+				return
+			} else {
+				let msg = ""
+				knownHosts.forEach(host => {
+					msg += `${host.serverUrl} ${host.checksum}<br>`
+				})
+				sendSystemMessage(msg)
+			}
+		}
+	}
 ]
 
 function sendMessage(){
@@ -322,6 +392,13 @@ function sendMessage(){
 	if(content === ""){
 		return
 	}
+	if(inputResolve !== null){
+		inputResolve(content)
+		inputResolve = null
+		msgBox.value = ""
+		return
+	}
+
 	//check if its a command
 	let command = null
 	for(let x of commands){
