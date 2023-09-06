@@ -4,30 +4,54 @@ const socketio = require("socket.io")
 const CryptoJS = require("crypto-js")
 const crypto = require("crypto")
 
+const fs = require("fs")
+const path = require("path")
+
 const app = express()
 const server = http.createServer(app)
 const io = new socketio.Server(server, {cors: {origin: "*"}})
 io.listen(server)
 
-//generate key pair
-const { publicKey, privateKey } = crypto.generateKeyPairSync("rsa", {
-	modulusLength: 1024,
-	publicKeyEncoding: {
-		type: 'spki',
-		format: 'pem'
-	},
-	privateKeyEncoding: {
-		type: 'pkcs8',
-		format: 'pem',
-	}
-})
+const pubKeyFile = path.join(__dirname, "key_pub.pem")
+const privateKeyFile = path.join(__dirname, "key.pem")
+
+console.log("pub key exists", fs.existsSync(pubKeyFile))
+console.log("private key exists", fs.existsSync(privateKeyFile))
+
+let publicKey, privateKey
+
+if(fs.existsSync(pubKeyFile) && fs.existsSync(privateKeyFile)){
+	//load from file
+	console.log("Importing key pair from file")
+	publicKey = fs.readFileSync(pubKeyFile, "utf8")
+	privateKey = fs.readFileSync(privateKeyFile, "utf8")
+} else {
+	//generate key pair
+	console.log("Generating new key pair")
+	let keys = crypto.generateKeyPairSync("rsa", {
+		modulusLength: 1024,
+		publicKeyEncoding: {
+			type: 'spki',
+			format: 'pem'
+		},
+		privateKeyEncoding: {
+			type: 'pkcs8',
+			format: 'pem',
+		}
+	})
+	publicKey = keys.publicKey
+	privateKey = keys.privateKey
+	fs.writeFile(path.join(__dirname, "key_pub.pem"), publicKey, "utf8", err => console.error)
+	fs.writeFile(path.join(__dirname, "key.pem"), privateKey, "utf8", err => console.error)
+}
 
 const publicKeyHash = crypto.createHash("sha256")
 publicKeyHash.update(publicKey)
 const publicKeyChecksum = publicKeyHash.digest("hex")
-console.log("public key checksum", publicKeyChecksum)
 
 console.log(publicKey)
+
+console.log("public key checksum", publicKeyChecksum)
 
 let usernames = {}
 
@@ -176,7 +200,7 @@ io.on("connection", socket => {
 	})
 
 	socket.on("assignUsername", encrypted => {
-		let { ok, data }  = decryptData(encrypted)
+		let { ok, data } = decryptData(encrypted)
 		if(!ok) return
 		if(data.toLowerCase() === "system"){
 			sendSystemMessage(`Failed to assign username: ${data} is a reserved username`)
