@@ -4,6 +4,9 @@ let connecting = false
 
 let inputResolve = null
 
+let blurInterval = null
+let newMessages = 0
+
 const ScreenElement = document.querySelector("#screen")
 const serverUrlElement = document.querySelector("#serverUrl")
 const usernameBox = document.querySelector("#username")
@@ -56,6 +59,8 @@ function addMsgElement(name, content, timestamp){
 	//li.id = id.toString()
 	msgList.appendChild(li);
 	ScreenElement.scrollTop = li.offsetTop;
+
+	if(blurInterval !== null) newMessages++
 }
 
 function sendSystemMessage(message){
@@ -207,7 +212,6 @@ async function connect(){
 	
 	//how does the server securely send data to client? client dont have public key, only AES key
 	//encrypt with aes key, TODO, find out security complications with this
-	
 
 	sendSystemMessage("Connecting to socket server...")
 	socket = io(serverUrl, {
@@ -461,3 +465,28 @@ msgBox.addEventListener("keypress", (event) => {
 	}
 })
 
+window.addEventListener("blur", () => {
+	//on lost focus
+	//create interval
+	let even = false
+	blurInterval = setInterval(() => {
+		if(even){
+			//hide
+			document.title = "Web Chat"
+		} else if(newMessages > 0) {
+			document.title = `${newMessages} new messages`
+		}
+		even = !even
+	}, 1000)
+})
+
+window.addEventListener("focus", () => {
+	//on focus
+	//clear interval
+	document.title = "Web Chat"
+	if(blurInterval !== null){
+		clearInterval(blurInterval)
+		blurInterval = null
+		newMessages = 0
+	}
+})
