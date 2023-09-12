@@ -252,7 +252,9 @@ io.on("connection", socket => {
 				sendSystemMessage("Error: Can't switch to same channel")
 				return
 			}
-			sendToChannel(usernames[sid]["channel"], `${usernames[sid]["channel"]} switched to another channel`, true)
+			if(usernames[sid]["username"]){
+				sendToChannel(usernames[sid]["channel"], `${usernames[sid]["username"]} switched to another channel`, true)
+			}
 		}
 		usernames[sid]["channel"] = data
 		sendSystemMessage("Successfully switched channel")
