@@ -3,6 +3,42 @@ const express = require("express")
 const socketio = require("socket.io")
 const CryptoJS = require("crypto-js")
 const crypto = require("crypto")
+const markdownit = require("markdown-it")
+
+let markdownParser = markdownit({
+	html: false,
+	breaks: true,
+	linkify: true
+})
+
+function mp4EmbedPlugin(md, options) {
+	// Add a custom rule to parse MP4 video links with the @[video]() syntax
+	md.inline.ruler.before('link', 'mp4-embed', (state, silent) => {
+		if (silent) return false;
+		const regex = /^\@\[video\]\(([^)]+)\)$/i;
+		const match = state.src.match(regex);
+
+		if (!match) return false;
+
+		const token = state.push('mp4-embed', 'video', 0);
+		token.content = match[1];
+		token.markup = '@[video](';
+		token.map = [state.pos, state.posMax];
+		state.pos = state.posMax;
+
+		return true;
+	});
+
+	// Render the parsed MP4 video links as HTML <video> elements with <source> elements
+	md.renderer.rules['mp4-embed'] = (tokens, idx) => {
+		const token = tokens[idx];
+		const videoURL = token.content;
+
+		return `<video controls><source src="${videoURL}"></video>`;
+	};
+}
+
+markdownParser.use(mp4EmbedPlugin)
 
 const fs = require("fs")
 const path = require("path")
@@ -237,7 +273,9 @@ io.on("connection", socket => {
 			sendSystemMessage("You need to switch to a channel first. Type /channel channelName to switch.")
 			return
 		}
-		sendToChannel(channel, data, false, usernames[sid])
+		//parse data with markdown
+		let rendered = markdownParser.render(data)
+		sendToChannel(channel, rendered, false, usernames[sid])
 	})
 
 	socket.on("switchChannel", encrypted => {

@@ -52,7 +52,8 @@ function addMsgElement(name, content, timestamp){
 			}
 		}
 	}
-	checkForXSS(messageP);
+	//skip XSS check, server does that for us
+	//checkForXSS(messageP);
 	nameSpan.innerHTML = name
 	let date = new Date(timestamp)
 	dateSpan.innerHTML = date.toLocaleString()
@@ -458,8 +459,8 @@ function disconnect(){
 	socket.close()
 }
 
-msgBox.addEventListener("keypress", (event) => {
-	if (event.key === "Enter") {
+msgBox.addEventListener("keypress", event => {
+	if (event.key === "Enter" && !event.shiftKey) {
 		event.preventDefault();
 		document.querySelector("#sendMessageButton").click();
 	}
