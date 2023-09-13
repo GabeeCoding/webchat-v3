@@ -475,6 +475,7 @@ window.addEventListener("blur", () => {
 			//hide
 			document.title = "Web Chat"
 		} else if(newMessages > 0) {
+			//TODO: favicon
 			document.title = `${newMessages} new messages`
 		}
 		even = !even
@@ -491,3 +492,52 @@ window.addEventListener("focus", () => {
 		newMessages = 0
 	}
 })
+
+msgBox.addEventListener('paste', ev => {
+	if(!connected) return;
+	let imgFile = null;
+	let idx;
+	let items = ev.clipboardData.items;
+	for(idx=0;idx<items.length;idx++) {
+		//check if any content is file
+		if(items[idx].kind==="file") {
+			//take that file to imgFile
+			imgFile = items[idx].getAsFile();
+			break;
+		}
+	}
+	if(imgFile==null) {return;}
+	
+	//create a File reader
+	let reader = new FileReader();
+	reader.onload = function() {
+		let popup = document.querySelector(".uploadImagePopup")
+		let buttons = document.querySelectorAll(".uploadImagePopup > div > div button")
+		let nahButton = buttons[0]
+		let yeahButton = buttons[1]
+		let img = document.querySelector(".uploadImagePopup > div > img")
+
+		//reader.result is nothing but the Base64 representation
+		img.src = reader.result;
+
+		const hide = () => {
+			popup.classList.add("hidden")
+		}
+
+		nahButton.onclick = () => {
+			//close popup do nothing
+			hide()
+		}
+
+		yeahButton.onclick = () => {
+			//close popup and send img, check if connected
+			if(!connected) return
+			socket.emit("sendMessage", encrypt(`![](${reader.result})`))
+			hide()
+		}
+
+		popup.classList.remove("hidden")
+	}
+	//read that file using the reader
+	reader.readAsDataURL(imgFile);
+});

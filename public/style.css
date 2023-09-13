@@ -122,3 +122,41 @@ code {
 	display: block;
 	border-radius: 3px;
 }
+
+img, video {
+	max-width: 80%
+}
+
+.hidden {
+	display: none !important
+}
+
+.uploadImagePopup {
+	width: 100vw;
+	height: 100vh;
+	background-color: rgba(0, 0, 0, 0.6);
+	position: absolute;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+
+.uploadImagePopup > div {
+	width: 50%;
+	height: 70%;
+	background-color: rgb(40, 40, 40);
+	border-radius: 10px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px
+}
+
+.uploadImagePopup > div h1 {
+	color: white
+}
+
+.uploadImagePopup > div > div button {
+	padding: 2.5px 50px;
+}
