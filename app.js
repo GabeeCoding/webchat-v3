@@ -45,7 +45,13 @@ const path = require("path")
 
 const app = express()
 const server = http.createServer(app)
-const io = new socketio.Server(server, {cors: {origin: "*"}})
+const io = new socketio.Server(server, {
+	cors: {
+		origin: "*",
+	},
+	maxHttpBufferSize: 1e6 * 25
+	//25mb msg limit
+})
 io.listen(server)
 
 const pubKeyFile = path.join(__dirname, "key_pub.pem")
