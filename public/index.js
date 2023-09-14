@@ -36,6 +36,7 @@ function addMsgElement(name, content, timestamp){
 	li.appendChild(messageP)
 
 	messageP.innerHTML = content
+	/*
 	function checkForXSS(element){
 		for(x of Array.from(element.children)){
 			//for every child
@@ -52,8 +53,19 @@ function addMsgElement(name, content, timestamp){
 			}
 		}
 	}
+	*/
 	//skip XSS check, server does that for us
 	//checkForXSS(messageP);
+	
+	function setAnchorTarget(element){
+		for(x of Array.from(element.children)){
+			if(x.tagName === "A"){
+				x.target = "_blank"
+			}
+			setAnchorTarget(x)
+		}
+	}
+	setAnchorTarget(messageP)
 	nameSpan.innerHTML = name
 	let date = new Date(timestamp)
 	dateSpan.innerHTML = date.toLocaleString()

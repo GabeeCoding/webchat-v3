@@ -153,6 +153,11 @@ img, video {
 	padding: 10px
 }
 
+.uploadImagePopup > div > img {
+	max-height: 80%;
+	max-width: 80%;
+}
+
 .uploadImagePopup > div h1 {
 	color: white
 }
